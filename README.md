@@ -95,3 +95,9 @@ Map 2D scene positions onto 3D arrangements: `placeOnGrid`, `placeOnWall`, `plac
 ## License
 
 MIT
+
+---
+
+## ⭐ Star Fancy UI
+
+If this package is useful to you, a quick ⭐ on the repo really helps us build a better kit. Thank you!
