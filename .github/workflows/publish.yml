@@ -30,4 +30,4 @@ jobs:
       # on npmjs.com and the bootstrap NPM_TOKEN has been revoked. OIDC needs npm
       # 11.5+; the runner bundles npm 10, so fetch a fresh npm via npx for publish.
       - name: Publish
-        run: npx -y npm@latest publish --provenance --access public
+        run: npx -y npm@11.18.0 publish --provenance --access public
