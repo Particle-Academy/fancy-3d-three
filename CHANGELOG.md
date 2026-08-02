@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.1.1 — 2026-06-12
+
+- Maintenance only (4 internal commits).
+
 ### Changed
 
 - Widened the `@particle-academy/fancy-3d` requirement from `^0.4.0` to `>=0.4 <2.0`, so a
