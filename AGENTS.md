@@ -33,6 +33,7 @@ The Babylon twin uses the same names with `babylon`. Use `install-instructions`
 | `@particle-academy/fancy-3d-three/engine` | `threeEngine`, for `<Canvas engine={threeEngine}>`; `EngineHandle.root` is the live `THREE.Scene` |
 | `@particle-academy/fancy-3d-three/react` | `<Stage>` (renderer, `OrbitControls` camera, render loop), `<Monitor>`, `useStage()` (`renderer`, `scene`, `camera`, `canvas`, `overlayRoot`, `onFrame`, and `controls`, the Stage's `OrbitControls`) |
 | `@particle-academy/fancy-3d-three` | `createThreeAdapter`, `sceneBounds`, `placeOnCylinder`, primitives, layouts |
+| `@particle-academy/fancy-3d-three/three` | three.js itself, re-exported (`import * as THREE from ".../three"`). Use it in packages that draw into a `<Stage>` so they never declare or load their own `three` |
 
 - **Two modes.** Mount: `<Monitor>` maps real, interactive React onto a 3D quad
   through a CSS `matrix3d` overlay. Texture: `renderScene()` (from fancy-3d) with

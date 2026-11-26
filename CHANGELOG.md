@@ -4,6 +4,13 @@
 
 ### Added
 
+- **`@particle-academy/fancy-3d-three/three` re-exports three.js.** Packages
+  built on this adapter (fancy-graph's 3D view first) import three's classes
+  from here (custom `RawShaderMaterial`s, instanced geometry, lines, points)
+  instead of declaring `three` themselves, so they always share the Stage's one
+  copy of three. It is a re-export, not a bundle: `three` stays a peer, and
+  every class is identical to the one `three` exports. Nothing to do.
+
 - **`useStage()` now exposes `controls`, the Stage's `OrbitControls`.** A child
   can drive the camera through it: move `controls.target` to re-aim the orbit,
   tune damping or distance limits, or set `enabled = false` while it animates.

@@ -43,6 +43,17 @@
         "default": "./dist/engine.cjs"
       }
     }
+,
+    "./three": {
+      "import": {
+        "types": "./dist/three.d.ts",
+        "default": "./dist/three.js"
+      },
+      "require": {
+        "types": "./dist/three.d.cts",
+        "default": "./dist/three.cjs"
+      }
+    }
   },
   "files": [
     "dist",
