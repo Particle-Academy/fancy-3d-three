@@ -97,6 +97,13 @@ interface StageContextValue {
   onFrame(cb: () => void): () => void;
   /** The DOM container that screen overlays mount into. */
   overlayRoot: HTMLDivElement;
+  /**
+   * The Stage's OrbitControls, so a child can drive the camera: move
+   * `controls.target` to re-aim the orbit, tune damping or distance limits, or
+   * disable it while the child animates. The Stage still calls `controls.update()`
+   * (and so `camera.lookAt(controls.target)`) every frame, exactly as before.
+   */
+  controls: OrbitControls;
 }
 
 const StageContext = createContext<StageContextValue | null>(null);
@@ -236,6 +243,7 @@ export function Stage({
       camera,
       canvas,
       overlayRoot: overlay,
+      controls,
       onFrame(cb) {
         frameSubs.add(cb);
         return () => frameSubs.delete(cb);

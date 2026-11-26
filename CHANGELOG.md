@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`useStage()` now exposes `controls`, the Stage's `OrbitControls`.** A child
+  can drive the camera through it: move `controls.target` to re-aim the orbit,
+  tune damping or distance limits, or set `enabled = false` while it animates.
+  Additive: existing Stages render exactly as before, and the Stage still calls
+  `controls.update()` every frame, so `camera.lookAt(controls.target)` still
+  runs each frame for code that reads the target that way. Nothing to do;
+  if you intercept `camera.lookAt` to find the orbit target, you can read
+  `useStage().controls.target` instead. (CC-fancy-0062.)
+
 ### Changed
 
 - **CI: the lab-certificate gate verifies against the lab's rotated key list.**
