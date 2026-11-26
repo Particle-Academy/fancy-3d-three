@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 0.3.0 — 2026-11-26
+
 ### Added
 
 - **`@particle-academy/fancy-3d-three/three` re-exports three.js.** Packages
