@@ -2,6 +2,52 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`<SceneView scene={scene} />` renders a fancy-3d Scene on three.js the way
+  the DOM renderer shows it.** Same theme, same scale, same spacing, and a level,
+  front-on camera at the DOM `<Canvas fitOnMount>` zoom, all from the core's one
+  definition (`sceneToWorld`, `frameScene`, `SCENE_PALETTES`). Options: `theme`,
+  `background` (`"theme"` | `"transparent"` | a colour), `showGrid` / `gridSize`
+  (the DOM Canvas dot grid), `yaw`, `live(node)` to mount a node as live React on
+  a `<Monitor>`, `depth`, and children rendered inside the Stage. Mirrors
+  fancy-3d-babylon's `<SceneView>`. Additive; nothing to do.
+- **`<Stage clearColor="transparent">`** shows the page behind the canvas.
+- **`<Monitor background="transparent">` and `bezelThickness={0}`** draw no pane
+  and no bezel, for live content that brings its own (rounded) card surface.
+- Widget surfaces, `createCard3D` and `createWidgetTexture` take an optional
+  `theme`.
+
+### Changed
+
+- **BREAKING (visual): painted widgets follow the page theme, in the DOM card's
+  colours and proportions.** The painter was a private copy that always drew a
+  dark (`#0f172a`) card with text about twice the DOM card's size, so a scene the
+  DOM rendered light came out dark here, with a white live card in the middle of
+  it. `paintWidget` is now the core's (`@particle-academy/fancy-3d`), shared with
+  fancy-3d-babylon: light on a light page, dark under `.dark` / `[data-theme="dark"]`, at
+  the DOM card's metrics. **To keep the old look, pass `theme: "dark"`** on the
+  widget surface or to `createCard3D`; otherwise do nothing.
+- **BREAKING (visual): one unit scale and one default node size, the core's.**
+  Widget textures auto-size at `PX_PER_UNIT` (100) scene px per world unit
+  (was 120), `createThreeAdapter` planes use
+  `1 / PX_PER_UNIT` (was `1 / 180`), `placeOnGrid` defaults to the same scale
+  (was `1 / 120`), and a node with no `size` is 240 x 150 everywhere (the layouts
+  and `sceneBounds` assumed 200 x 120 while the core and DOM used 240 x 150).
+  If you placed nodes with these defaults and tuned a camera around them, pass
+  the old `scale` to `placeOnGrid`, or move the camera; the new numbers are the
+  ones the DOM view and `<SceneView>` agree on.
+- `createCard3D`'s default edge is the theme's card edge, not a near-black.
+- **BREAKING: needs `@particle-academy/fancy-3d` 0.6.0 or later.** The shared
+  `paintWidget`, palettes, `sceneToWorld` and `frameScene` are imported from it.
+  Upgrade the core with this package; nothing else to do. (Release order: the
+  core first, then this package with its peer floor raised to `>=0.6 <2.0`.)
+
+### Fixed
+
+- A node with no `size` gets the same default box as in the core and the DOM
+  renderer, so `sceneBounds` and the layouts agree with them.
+
 ## 0.3.0 — 2026-11-26
 
 ### Added

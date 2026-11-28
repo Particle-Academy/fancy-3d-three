@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { sceneBounds } from "../src/index";
 import { placeOnArc, placeOnGrid, placeOnWall } from "../src/layouts";
+import { DEFAULT_NODE_SIZE } from "@particle-academy/fancy-3d";
 import type { Scene, SceneNode } from "@particle-academy/fancy-3d";
 
 const node = (x: number, y: number, w?: number, h?: number): SceneNode =>
@@ -25,11 +26,11 @@ describe("sceneBounds", () => {
         expect(b).toEqual({ minX: 0, maxX: 500, minY: 0, maxY: 220 });
     });
 
-    it("assumes a default card size for a node that declares none", () => {
+    it("gives a node with no size the core default, as every renderer does", () => {
         const b = sceneBounds(scene([node(0, 0)]));
 
-        expect(b.maxX).toBe(200);
-        expect(b.maxY).toBe(120);
+        expect(b.maxX).toBe(DEFAULT_NODE_SIZE.w);
+        expect(b.maxY).toBe(DEFAULT_NODE_SIZE.h);
     });
 
     it("handles negative positions", () => {

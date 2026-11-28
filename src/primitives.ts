@@ -15,7 +15,8 @@
  */
 import * as THREE from "three";
 import { DecalGeometry } from "three/examples/jsm/geometries/DecalGeometry.js";
-import type { WidgetSpec } from "@particle-academy/fancy-3d";
+import type { SceneTheme, WidgetSpec } from "@particle-academy/fancy-3d";
+import { PX_PER_UNIT, scenePalette } from "@particle-academy/fancy-3d";
 import { TEX_SCALE, paintWidget } from "./painters";
 
 export type PaintFn = (ctx: CanvasRenderingContext2D, width: number, height: number) => void;
@@ -23,9 +24,20 @@ export type PaintFn = (ctx: CanvasRenderingContext2D, width: number, height: num
 export type SurfaceContent =
   | { type: "color"; color: string }
   | { type: "paint"; paint: PaintFn; pixelWidth?: number; pixelHeight?: number; transparent?: boolean }
-  | { type: "widget"; widget: WidgetSpec; pixelWidth?: number; pixelHeight?: number; selected?: boolean };
+  | {
+      type: "widget";
+      widget: WidgetSpec;
+      /** The widget's size in scene px. Defaults to the world size at `PX_PER_UNIT`. */
+      pixelWidth?: number;
+      pixelHeight?: number;
+      selected?: boolean;
+      /** Card theme. Default: the page's mode, as the DOM renderer reads it. */
+      theme?: SceneTheme | "auto";
+    };
 
-const DEFAULT_DENSITY = 120;
+/** Texture px per world unit when a surface is sized from world dimensions:
+ *  the core's one unit scale, so a painted widget is laid out at its scene size. */
+const DEFAULT_DENSITY = PX_PER_UNIT;
 const MAX_TEXTURE_AXIS = 1024;
 
 function autoPixelSize(worldWidth: number, worldHeight: number, density = DEFAULT_DENSITY) {
@@ -90,7 +102,7 @@ function buildSurface(surface: SurfaceContent, autoSize?: { worldWidth: number; 
   const transparent = surface.type === "widget" || (surface.type === "paint" && !!surface.transparent);
   const texture = canvasTexture(w, h, (ctx) => {
     if (surface.type === "paint") surface.paint(ctx, w!, h!);
-    else paintWidget(ctx, surface.widget, w!, h!, surface.selected ?? false);
+    else paintWidget(ctx, surface.widget, w!, h!, surface.selected ?? false, { theme: surface.theme });
   });
   const material = new THREE.MeshBasicMaterial({ map: texture, transparent, toneMapped: false });
   return { material, texture };
@@ -317,19 +329,23 @@ export interface Card3DOpts {
   depth?: number;
   /** Surface for the front face (the visible UI). */
   front: SurfaceContent;
-  /** Surface for the side and back faces. Defaults to a dark color. */
+  /** Surface for the side and back faces. Defaults to the theme's card edge. */
   edge?: SurfaceContent;
+  /** Theme for a widget front and the default edge. Default: the page's mode. */
+  theme?: SceneTheme | "auto";
 }
 
 export function createCard3D(opts: Card3DOpts): THREE.Mesh {
-  const edge = opts.edge ?? { type: "color" as const, color: "#0b0f17" };
+  const edge = opts.edge ?? { type: "color" as const, color: scenePalette(opts.theme).edge };
+  const front: SurfaceContent =
+    opts.front.type === "widget" && opts.theme && !opts.front.theme ? { ...opts.front, theme: opts.theme } : opts.front;
   return createBuilding({
     scene: opts.scene,
     name: opts.name ?? "card3d",
     width: opts.width,
     height: opts.height,
     depth: opts.depth ?? 0.06,
-    faces: { front: opts.front, back: edge, top: edge, bottom: edge, left: edge, right: edge },
+    faces: { front, back: edge, top: edge, bottom: edge, left: edge, right: edge },
   });
 }
 
@@ -497,8 +513,9 @@ export function createWidgetTexture(
   pixelWidth: number,
   pixelHeight: number,
   selected = false,
+  theme?: SceneTheme | "auto",
 ): THREE.CanvasTexture {
-  const tex = canvasTexture(pixelWidth, pixelHeight, (ctx) => paintWidget(ctx, widget, pixelWidth, pixelHeight, selected));
+  const tex = canvasTexture(pixelWidth, pixelHeight, (ctx) => paintWidget(ctx, widget, pixelWidth, pixelHeight, selected, { theme }));
   tex.name = name;
   return tex;
 }

@@ -19,11 +19,13 @@ import type {
   WidgetAdapter,
   WidgetSpec,
 } from "@particle-academy/fancy-3d";
+import { PX_PER_UNIT, nodeSize, sceneBounds as coreSceneBounds } from "@particle-academy/fancy-3d";
 
 import { TEX_SCALE, paintWidget } from "./painters";
 export { TEX_SCALE, paintWidget } from "./painters";
 
-const WORLD_SCALE = 1 / 180; // pixels → world units
+/** Scene px to world units: the core's one unit scale, shared with every renderer. */
+const WORLD_SCALE = 1 / PX_PER_UNIT;
 
 /* ------------------------------------------------------------------ */
 /* Adapter                                                             */
@@ -82,8 +84,9 @@ export function placeOnCylinder(
   const arc = opts.arc ?? Math.PI * 0.9; // ~160°
   const rangeX = bounds.maxX - bounds.minX || 1;
   const rangeY = bounds.maxY - bounds.minY || 1;
-  const cx = (node.position.x + (node.size?.w ?? 200) / 2 - bounds.minX) / rangeX;
-  const cy = (node.position.y + (node.size?.h ?? 120) / 2 - bounds.minY) / rangeY;
+  const { w, h } = nodeSize(node);
+  const cx = (node.position.x + w / 2 - bounds.minX) / rangeX;
+  const cy = (node.position.y + h / 2 - bounds.minY) / rangeY;
   const angle = (cx - 0.5) * arc;
   const height = (0.5 - cy) * 6;
   obj.position.set(Math.sin(angle) * radius, height, Math.cos(angle) * radius);
@@ -92,26 +95,16 @@ export function placeOnCylinder(
   obj.rotation.set(0, angle, 0);
 }
 
+/**
+ * The box around a scene's nodes, in scene px, with the core's default node
+ * size for a node that has none. It used to assume 200 x 120 here while the
+ * core and the DOM renderer used 240 x 150, so one scene had two extents.
+ */
 export function sceneBounds(scene: Scene) {
-  // An empty scene has no extent, and saying so is the only safe answer.
-  // Math.min(...[]) is Infinity and Math.max(...[]) is -Infinity, so the
-  // unguarded spread returned INVERTED INFINITE bounds. Every layout then
-  // centres on (minX + maxX) / 2, which is NaN, and a NaN transform renders as
-  // nothing — so an empty scene and a broken one looked identical.
-  if (scene.nodes.length === 0) {
-    return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
-  }
-
-  const xs = scene.nodes.map((n) => n.position.x);
-  const ys = scene.nodes.map((n) => n.position.y);
-  const xe = scene.nodes.map((n) => n.position.x + (n.size?.w ?? 200));
-  const ye = scene.nodes.map((n) => n.position.y + (n.size?.h ?? 120));
-  return {
-    minX: Math.min(...xs),
-    maxX: Math.max(...xe),
-    minY: Math.min(...ys),
-    maxY: Math.max(...ye),
-  };
+  // An empty scene has no extent, and saying so is the only safe answer: an
+  // inverted infinite box would centre every layout on NaN, which renders as
+  // nothing, so an empty scene and a broken one would look identical.
+  return coreSceneBounds(scene) ?? { minX: 0, maxX: 0, minY: 0, maxY: 0 };
 }
 
 export * from "./primitives";

@@ -20,11 +20,26 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
   type ReactNode,
 } from "react";
+import {
+  FIT_PADDING,
+  SCENE_PALETTES,
+  fitZoom,
+  frameScene,
+  resolveSceneTheme,
+  sceneBounds,
+  sceneToWorld,
+  type Scene as FancyScene,
+  type SceneNode,
+  type SceneTheme,
+  type WorldPlacement,
+} from "@particle-academy/fancy-3d";
+import { createCard3D } from "./primitives";
 
 /* ------------------------------------------------------------------ */
 /* 2D perspective transform — maps a unit rectangle to a 4-point quad  */
@@ -108,6 +123,12 @@ interface StageContextValue {
 
 const StageContext = createContext<StageContextValue | null>(null);
 
+/** Set a Stage background: a CSS colour, or `"transparent"`. */
+function applyClearColor(renderer: THREE.WebGLRenderer, color: string) {
+  if (color === "transparent") renderer.setClearColor(0x000000, 0);
+  else renderer.setClearColor(new THREE.Color(color), 1);
+}
+
 export function useStage(): StageContextValue {
   const ctx = useContext(StageContext);
   if (!ctx) throw new Error("useStage() must be called inside <Stage>");
@@ -128,7 +149,7 @@ export interface StageProps {
   cameraAlpha?: number;
   /** Initial vertical angle from +Y (radians). Defaults to π/2.4. */
   cameraBeta?: number;
-  /** Background clear color. Defaults to a near-black. */
+  /** Background clear color (CSS colour), or `"transparent"` to show the page behind the canvas. Defaults to a near-black. */
   clearColor?: string;
   /** Disable the default lights / camera if you want to set your own. */
   bare?: boolean;
@@ -175,7 +196,7 @@ export function Stage({
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true, stencil: true });
     renderer.setPixelRatio(window.devicePixelRatio || 1);
-    renderer.setClearColor(new THREE.Color(clearColor), 1);
+    applyClearColor(renderer, clearColor);
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
@@ -296,9 +317,13 @@ export interface MonitorProps {
   rotationY?: number;
   /** Bezel color. Defaults to a near-black frame. */
   bezel?: string;
-  /** Bezel thickness in world units. Defaults to 0.06. */
+  /** Bezel thickness in world units. Defaults to 0.06; 0 draws no bezel. */
   bezelThickness?: number;
-  /** Background color visible behind the React content. */
+  /**
+   * Background color visible behind the React content, or `"transparent"`
+   * when the content brings its own surface (a rounded card): the pane is then
+   * not drawn, so nothing square shows around the content's corners.
+   */
   background?: string;
   /** Design-time pixel width for the children. Defaults to `width * 360`. */
   pixelWidth?: number;
@@ -332,18 +357,26 @@ export function Monitor({
   // Build the bezel + projection-target pane.
   useEffect(() => {
     const { scene } = stage;
-    const bezelMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(width + bezelThickness * 2, height + bezelThickness * 2, bezelThickness),
-      new THREE.MeshStandardMaterial({ color: new THREE.Color(bezel), roughness: 0.5, metalness: 0.1 }),
-    );
-    bezelMesh.position.set(position[0], position[1], position[2]);
-    bezelMesh.rotation.y = rotationY;
-    scene.add(bezelMesh);
+    const bezelMesh =
+      bezelThickness > 0
+        ? new THREE.Mesh(
+            new THREE.BoxGeometry(width + bezelThickness * 2, height + bezelThickness * 2, bezelThickness),
+            new THREE.MeshStandardMaterial({ color: new THREE.Color(bezel), roughness: 0.5, metalness: 0.1 }),
+          )
+        : null;
+    if (bezelMesh) {
+      bezelMesh.position.set(position[0], position[1], position[2]);
+      bezelMesh.rotation.y = rotationY;
+      scene.add(bezelMesh);
+    }
 
+    const transparent = background === "transparent";
     const pane = new THREE.Mesh(
       new THREE.PlaneGeometry(width, height),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(background), side: THREE.DoubleSide, toneMapped: false }),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(transparent ? "#000000" : background), side: THREE.DoubleSide, toneMapped: false }),
     );
+    // A transparent Monitor still needs its pane as the projection target; it is just not drawn.
+    pane.visible = !transparent;
     pane.rotation.y = rotationY;
     // Offset the pane forward of the bezel's +Z front so the HTML overlay lines
     // up with the visible face.
@@ -355,11 +388,13 @@ export function Monitor({
 
     return () => {
       scene.remove(pane);
-      scene.remove(bezelMesh);
       pane.geometry.dispose();
       (pane.material as THREE.Material).dispose();
-      bezelMesh.geometry.dispose();
-      (bezelMesh.material as THREE.Material).dispose();
+      if (bezelMesh) {
+        scene.remove(bezelMesh);
+        bezelMesh.geometry.dispose();
+        (bezelMesh.material as THREE.Material).dispose();
+      }
       meshRef.current = null;
     };
   }, [stage, name, width, height, bezel, bezelThickness, background, position, rotationY]);
@@ -452,12 +487,238 @@ export function Monitor({
         transformOrigin: "0 0",
         pointerEvents: "auto",
         overflow: "hidden",
-        background,
-        borderRadius: 4,
+        background: background === "transparent" ? "transparent" : background,
+        borderRadius: background === "transparent" ? 0 : 4,
         display: "none",
       }}
     >
       {children}
     </div>
   );
+}
+
+/* ------------------------------------------------------------------ */
+/* SceneView — a fancy-3d Scene, as the DOM renderer shows it          */
+/* ------------------------------------------------------------------ */
+
+export interface SceneViewProps {
+  /** The scene: the same JSON the DOM `<Canvas>` renders. */
+  scene: FancyScene;
+  /** Card theme. Default `"auto"`: the page's mode, read as react-fancy (and so the DOM renderer) reads it. */
+  theme?: SceneTheme | "auto";
+  /**
+   * The canvas behind the cards: `"theme"` (default) for the palette's canvas
+   * colour, `"transparent"` to show the host's own background (so a page that
+   * styles its DOM canvas shows the same surface here), or a CSS colour.
+   */
+  background?: "theme" | "transparent" | (string & {});
+  /** Swing the camera around the scene, in radians; positive moves it to the viewer's right. */
+  yaw?: number;
+  /**
+   * Mount a node as LIVE React on a `<Monitor>` instead of a painted card:
+   * return its content (e.g. `domAdapter.render(node.widget, ...)`), or
+   * nothing to paint it. Live content is sized to the node, so it lays out
+   * exactly as it does in the DOM.
+   */
+  live?: (node: SceneNode) => ReactNode | null | undefined;
+  /**
+   * Draw the DOM `<Canvas showGrid gridStyle="dots">` dot grid behind the
+   * cards, at the same size, colour and offset, so the surface matches too.
+   */
+  showGrid?: boolean;
+  /** Grid spacing in scene px. Defaults to 20, as `<Canvas>`. */
+  gridSize?: number;
+  /** Rendered inside the Stage, so they can `useStage()` to add their own meshes or drive the camera. */
+  children?: ReactNode;
+  /** Card thickness in world units. Defaults to 0.01 (1 scene px), so its sides read as the card's border. */
+  depth?: number;
+  className?: string;
+  style?: CSSProperties;
+}
+
+/**
+ * Render a fancy-3d `Scene` on three.js so it looks like the DOM renderer's
+ * view of the same Scene: the core's palette, the core's unit scale
+ * (`sceneToWorld`), and the core's framing (`frameScene`: level, front-on, at
+ * the DOM `<Canvas fitOnMount>` zoom). Drag to orbit; the framing resets when
+ * the scene's extent, the viewport or `yaw` changes. Mirrors fancy-3d-babylon's
+ * `<SceneView>`.
+ */
+export function SceneView({ className, style, children, ...props }: SceneViewProps) {
+  return (
+    <Stage clearColor="transparent" className={className} style={style}>
+      <SceneViewContent {...props} />
+      {children}
+    </Stage>
+  );
+}
+
+function useSceneTheme(theme: SceneTheme | "auto", el: Element): SceneTheme {
+  const [resolved, setResolved] = useState<SceneTheme>(() => resolveSceneTheme(theme, el));
+  useEffect(() => {
+    const update = () => setResolved(resolveSceneTheme(theme, el));
+    update();
+    if (theme !== "auto" || typeof MutationObserver === "undefined") return;
+    // Follow the page when it switches mode, as the DOM renderer's cards do.
+    const mo = new MutationObserver(update);
+    mo.observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ["class", "data-theme"] });
+    return () => mo.disconnect();
+  }, [theme, el]);
+  return resolved;
+}
+
+type CardMesh = THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>;
+
+function disposeCard(mesh: CardMesh) {
+  mesh.removeFromParent();
+  mesh.geometry.dispose();
+  for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+    (m as THREE.MeshBasicMaterial).map?.dispose();
+    m.dispose();
+  }
+}
+
+function SceneViewContent({
+  scene,
+  theme = "auto",
+  background = "theme",
+  yaw = 0,
+  live,
+  depth = 0.01,
+  showGrid = false,
+  gridSize = 20,
+}: Omit<SceneViewProps, "className" | "style" | "children">) {
+  const stage = useStage();
+  const resolved = useSceneTheme(theme, stage.canvas);
+  const palette = SCENE_PALETTES[resolved];
+  const placements = useMemo(() => sceneToWorld(scene), [scene]);
+  const liveContent = new Map<string, ReactNode>();
+  if (live) {
+    for (const node of scene.nodes) {
+      const content = live(node);
+      if (content != null && content !== false) liveContent.set(node.id, content);
+    }
+  }
+
+  // The surface: with a grid, the WebGL canvas clears transparent and the
+  // Stage's own box carries the colour and the dots, as the DOM Canvas does.
+  const surface = background === "theme" ? palette.canvas : background;
+  useEffect(() => {
+    const clear = showGrid ? "transparent" : surface;
+    applyClearColor(stage.renderer, clear);
+    const box = stage.canvas.parentElement;
+    if (box) box.style.backgroundColor = showGrid && surface !== "transparent" ? surface : "";
+  }, [stage, surface, showGrid]);
+
+  // Frame the camera: level, front-on, at the DOM fit's scale. Keyed on the
+  // scene's extent rather than its data, so editing a value does not throw
+  // away the user's orbit.
+  const extent = JSON.stringify(sceneBounds(scene));
+  useEffect(() => {
+    const { camera, controls, canvas } = stage;
+    const frame = () => {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      if (!width || !height) return;
+      paintGrid(stage.canvas.parentElement, showGrid, scene, width, height, gridSize, palette.grid);
+      const f = frameScene(scene, { width, height, fovY: THREE.MathUtils.degToRad(camera.fov) });
+      // three is right-handed: alpha pi/2 puts the camera on +z, with +x on
+      // the viewer's right. A positive yaw swings it to the viewer's right.
+      const alpha = Math.PI / 2 - yaw;
+      controls.maxPolarAngle = Math.PI / 2;
+      controls.minDistance = Math.min(controls.minDistance, f.distance / 4);
+      controls.maxDistance = Math.max(controls.maxDistance, f.distance * 4);
+      controls.target.set(...f.target);
+      camera.position.set(
+        f.target[0] + f.distance * Math.sin(f.beta) * Math.cos(alpha),
+        f.target[1] + f.distance * Math.cos(f.beta),
+        f.target[2] + f.distance * Math.sin(f.beta) * Math.sin(alpha),
+      );
+      camera.lookAt(controls.target);
+      controls.update();
+    };
+    frame();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(frame);
+    ro.observe(canvas);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, extent, yaw, showGrid, gridSize, palette.grid]);
+
+  // Painted cards: rebuilt only when a painted node, the theme or the depth changes.
+  const painted = scene.nodes.filter((n) => !liveContent.has(n.id));
+  const paintedKey = JSON.stringify([painted, resolved, depth]);
+  useEffect(() => {
+    const meshes: CardMesh[] = [];
+    for (const node of painted) {
+      const at = placements.find((p) => p.id === node.id);
+      if (!at) continue;
+      const mesh = createCard3D({
+        scene: stage.scene,
+        name: `scene-node-${node.id}`,
+        width: at.width,
+        height: at.height,
+        depth,
+        theme: resolved,
+        edge: { type: "color", color: palette.cardBorder },
+        front: { type: "widget", widget: node.widget, pixelWidth: at.pixelWidth, pixelHeight: at.pixelHeight },
+      }) as CardMesh;
+      // The card's face sits on the scene plane; its thickness goes behind it.
+      mesh.position.set(at.x, at.y, at.z - depth / 2);
+      mesh.userData = { ...mesh.userData, nodeId: node.id, kind: node.widget.kind };
+      meshes.push(mesh);
+    }
+    return () => meshes.forEach(disposeCard);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, paintedKey, placements]);
+
+  return (
+    <>
+      {[...liveContent.entries()].map(([id, content]) => {
+        const at = placements.find((p) => p.id === id);
+        return at ? <LiveNode key={id} id={id} at={at} content={content} /> : null;
+      })}
+    </>
+  );
+}
+
+function LiveNode({ id, at, content }: { id: string; at: WorldPlacement; content: ReactNode }) {
+  const position = useMemo<[number, number, number]>(() => [at.x, at.y, at.z], [at.x, at.y, at.z]);
+  return (
+    <Monitor
+      name={id}
+      position={position}
+      width={at.width}
+      height={at.height}
+      pixelWidth={at.pixelWidth}
+      pixelHeight={at.pixelHeight}
+      bezelThickness={0}
+      background="transparent"
+    >
+      {content}
+    </Monitor>
+  );
+}
+
+/**
+ * The DOM Canvas's dot grid on a Stage's box: same dot, spacing x zoom, and the
+ * same offset `fitOnMount` pans to, from the core's `fitZoom`.
+ */
+function paintGrid(box: HTMLElement | null, on: boolean, scene: FancyScene, width: number, height: number, gridSize: number, color: string) {
+  if (!box) return;
+  const b = sceneBounds(scene);
+  if (!on || !b) {
+    box.style.backgroundImage = "";
+    box.style.backgroundSize = "";
+    box.style.backgroundPosition = "";
+    return;
+  }
+  const zoom = fitZoom(b, width, height);
+  const contentW = b.maxX - b.minX + FIT_PADDING * 2;
+  const contentH = b.maxY - b.minY + FIT_PADDING * 2;
+  const panX = (width - contentW * zoom) / 2 - b.minX * zoom + FIT_PADDING * zoom;
+  const panY = (height - contentH * zoom) / 2 - b.minY * zoom + FIT_PADDING * zoom;
+  box.style.backgroundImage = `radial-gradient(circle, ${color} 1px, transparent 1px)`;
+  box.style.backgroundSize = `${gridSize * zoom}px ${gridSize * zoom}px`;
+  box.style.backgroundPosition = `${panX}px ${panY}px`;
 }

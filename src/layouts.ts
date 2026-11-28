@@ -10,6 +10,7 @@
  */
 import * as THREE from "three";
 import type { SceneNode } from "@particle-academy/fancy-3d";
+import { PX_PER_UNIT, nodeSize } from "@particle-academy/fancy-3d";
 
 interface Bounds {
   minX: number;
@@ -18,8 +19,9 @@ interface Bounds {
   maxY: number;
 }
 
+/** A node's box: the core's default when it has none, as every renderer uses. */
 function sizeOf(node: SceneNode): { w: number; h: number } {
-  return { w: node.size?.w ?? 200, h: node.size?.h ?? 120 };
+  return nodeSize(node);
 }
 
 function normalizedCenter(node: SceneNode, bounds: Bounds) {
@@ -34,14 +36,14 @@ function normalizedCenter(node: SceneNode, bounds: Bounds) {
 /* ------------------------------------------------------------------ */
 
 export interface GridLayoutOpts {
-  /** Pixel-to-world unit ratio. Defaults to 1/120. */
+  /** Pixel-to-world unit ratio. Defaults to the core's `1 / PX_PER_UNIT`. */
   scale?: number;
   /** World-space center of the grid. Defaults to (0, 0, 0). */
   origin?: THREE.Vector3;
 }
 
 export function placeOnGrid(node: SceneNode, obj: THREE.Object3D, bounds: Bounds, opts: GridLayoutOpts = {}) {
-  const scale = opts.scale ?? 1 / 120;
+  const scale = opts.scale ?? 1 / PX_PER_UNIT;
   const origin = opts.origin ?? new THREE.Vector3(0, 0, 0);
   const { w, h } = sizeOf(node);
   const cx = node.position.x + w / 2 - (bounds.minX + bounds.maxX) / 2;

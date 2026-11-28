@@ -31,7 +31,7 @@ The Babylon twin uses the same names with `babylon`. Use `install-instructions`
 | Import | What |
 |---|---|
 | `@particle-academy/fancy-3d-three/engine` | `threeEngine`, for `<Canvas engine={threeEngine}>`; `EngineHandle.root` is the live `THREE.Scene` |
-| `@particle-academy/fancy-3d-three/react` | `<Stage>` (renderer, `OrbitControls` camera, render loop), `<Monitor>`, `useStage()` (`renderer`, `scene`, `camera`, `canvas`, `overlayRoot`, `onFrame`, and `controls`, the Stage's `OrbitControls`) |
+| `@particle-academy/fancy-3d-three/react` | `<SceneView>` (a whole fancy-3d `Scene`, as the DOM renderer shows it), `<Stage>` (renderer, `OrbitControls` camera, render loop), `<Monitor>`, `useStage()` (`renderer`, `scene`, `camera`, `canvas`, `overlayRoot`, `onFrame`, and `controls`, the Stage's `OrbitControls`) |
 | `@particle-academy/fancy-3d-three` | `createThreeAdapter`, `sceneBounds`, `placeOnCylinder`, primitives, layouts |
 | `@particle-academy/fancy-3d-three/three` | three.js itself, re-exported (`import * as THREE from ".../three"`). Use it in packages that draw into a `<Stage>` so they never declare or load their own `three` |
 
@@ -47,6 +47,19 @@ The Babylon twin uses the same names with `babylon`. Use `install-instructions`
   `placeOnCylinder`), `placeOnPath`, `placeOnSphere`. Each mutates
   `obj.position` / `obj.rotation`; pair with `sceneBounds(scene)`.
 
+- **`<SceneView scene={scene} />` is the way to render a Scene.** It uses the
+  core's palette, unit scale and framing, so it matches the DOM `<Canvas
+  fitOnMount>` view of the same Scene: same theme, size, spacing, and a level,
+  front-on camera. Props: `theme` (`"auto"` follows the page), `background`
+  (`"theme"`, `"transparent"` to show the host's surface, or a colour),
+  `showGrid` / `gridSize` (the DOM Canvas dot grid), `yaw` (radians, positive
+  swings the camera to the viewer's right), `live(node)` (return React to mount
+  that node live on a `<Monitor>`, e.g. `domAdapter.render(...)`), `depth`, and
+  children (rendered inside the Stage, so they can `useStage()`).
+- **Painted cards follow the page theme** (react-fancy's `.dark` /
+  `[data-theme="dark"]`). Pass `theme: "dark"` on a widget surface,
+  `createCard3D` or `<SceneView>` to pin one.
+
 ## Traps
 
 - **Not SSR-safe.** three.js needs `window`. In an Inertia app wrap `<Stage>`,
@@ -56,6 +69,14 @@ The Babylon twin uses the same names with `babylon`. Use `install-instructions`
 - **`createBillboard({ faceCamera: true })` only faces the camera inside a
   `<Stage>`.** Outside one, call `mesh.lookAt(camera.position)` in your own loop.
 - **Panels take `doubleSided?: boolean`**, not Babylon's `sideOrientation`.
+
+- **Do not hand-place a Scene in three.js.** Picking your own scale, camera
+  radius or angle, or background is how the same Scene ends up a different size,
+  tilted and in a different theme from the DOM view. Use `<SceneView>`, or the
+  core's `sceneToWorld` + `frameScene` if you need your own Stage.
+- **`<Monitor background="transparent" bezelThickness={0}>`** for live content
+  that brings its own card surface; otherwise the square pane and bezel show
+  around its rounded corners.
 
 ## When you build with this kit
 
