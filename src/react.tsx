@@ -22,9 +22,11 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useImperativeHandle,
   useState,
   type CSSProperties,
   type ReactNode,
+  type Ref,
 } from "react";
 import {
   FIT_PADDING,
@@ -39,6 +41,16 @@ import {
   type SceneTheme,
   type WorldPlacement,
 } from "@particle-academy/fancy-3d";
+import {
+  FullscreenButton,
+  FullscreenContext,
+  useFullscreen,
+  useFullscreenContext,
+  type FullscreenButtonPlacement,
+  type FullscreenChangeMeta,
+  type FullscreenLabels,
+  type FullscreenMode,
+} from "@particle-academy/fancy-3d/fullscreen";
 import { createCard3D, createPanel } from "./primitives";
 
 /* ------------------------------------------------------------------ */
@@ -155,8 +167,33 @@ export interface StageProps {
   bare?: boolean;
   /** Callback after the scene is created — set up custom cameras, lights, meshes. */
   onReady?: (scene: THREE.Scene, ctx: { camera: THREE.PerspectiveCamera; renderer: THREE.WebGLRenderer }) => void;
+  /**
+   * Things to draw over the scene, inside the Stage root: breadcrumbs, a fact
+   * card, a toolbar. They go full screen with the Stage. The layer passes
+   * pointer events through to the canvas except on its direct children.
+   */
+  overlay?: ReactNode;
+  /** Controlled full screen: the Stage root (canvas, Monitors, overlay) goes full screen. */
+  fullscreen?: boolean;
+  defaultFullscreen?: boolean;
+  /** Every requested change: `source` is `"user"` (button, Esc), `"api"` (the handle) or `"browser"` (left the browser's full screen). */
+  onFullscreenChange?: (fullscreen: boolean, meta: FullscreenChangeMeta) => void;
+  fullscreenLabels?: Partial<FullscreenLabels>;
+  /** The full-screen toggle: shown by default (bottom right); `false` hides it, a corner moves it. */
+  fullscreenButton?: boolean | Exclude<FullscreenButtonPlacement, "inline">;
+  ref?: Ref<StageHandle>;
   className?: string;
   style?: CSSProperties;
+}
+
+/** The Stage's handle (`ref`): full screen from code or an agent. */
+export interface StageHandle {
+  /** Enter or leave full screen; reported with source `"api"`. */
+  setFullscreen(on: boolean): void;
+  toggleFullscreen(): void;
+  getFullscreen(): { fullscreen: boolean; mode: FullscreenMode | null };
+  /** The Stage root (`[data-fancy-3d-stage]`). */
+  readonly root: HTMLDivElement | null;
 }
 
 /**
@@ -169,7 +206,8 @@ export interface StageProps {
  */
 const STAGE_FOCUS_CSS =
   "[data-fancy-3d-canvas]:focus-visible { box-shadow: inset 0 0 0 2px var(--fancy-focus, var(--color-blue-500, #3b82f6)); }" +
-  " :where(.dark, [data-theme=\"dark\"]) [data-fancy-3d-canvas]:focus-visible { box-shadow: inset 0 0 0 2px var(--fancy-focus-dark, var(--color-blue-400, #60a5fa)); }";
+  " :where(.dark, [data-theme=\"dark\"]) [data-fancy-3d-canvas]:focus-visible { box-shadow: inset 0 0 0 2px var(--fancy-focus-dark, var(--color-blue-400, #60a5fa)); }" +
+  " [data-fancy-3d-stage-overlay] > * { pointer-events: auto; }";
 
 export function Stage({
   children,
@@ -180,6 +218,13 @@ export function Stage({
   clearColor = "#06080f",
   bare = false,
   onReady,
+  overlay,
+  fullscreen,
+  defaultFullscreen,
+  onFullscreenChange,
+  fullscreenLabels,
+  fullscreenButton = true,
+  ref,
   className,
   style,
 }: StageProps) {
@@ -187,6 +232,27 @@ export function Stage({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const [stage, setStage] = useState<StageContextValue | null>(null);
+  // Full screen takes the Stage root, so the Monitors and the overlay come along.
+  // Inside a viewer that owns full screen (fancy-graph's GraphView3D) the
+  // Stage's own hook stays inert and the outer controller is used.
+  const outer = useFullscreenContext();
+  const own = useFullscreen(containerRef, { fullscreen, defaultFullscreen, onFullscreenChange, labels: fullscreenLabels, enabled: outer === null });
+  const fs = outer ?? own;
+  const fsRef = useRef(fs);
+  fsRef.current = fs;
+  useImperativeHandle(
+    ref,
+    () => ({
+      setFullscreen: (on) => fsRef.current.setFullscreen(on, { source: "api" }),
+      toggleFullscreen: () => fsRef.current.toggle({ source: "api" }),
+      getFullscreen: () => ({ fullscreen: fsRef.current.fullscreen, mode: fsRef.current.mode }),
+      get root() {
+        return containerRef.current;
+      },
+    }),
+    [],
+  );
+  const buttonPlacement = fullscreenButton === true ? "bottom-right" : fullscreenButton === false ? null : fullscreenButton;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -283,6 +349,7 @@ export function Stage({
   }, []);
 
   return (
+    <FullscreenContext.Provider value={fs}>
     <div
       ref={containerRef}
       className={className}
@@ -298,7 +365,14 @@ export function Stage({
       />
       <div ref={overlayRef} style={{ position: "absolute", inset: 0, pointerEvents: "none" }} data-fancy-3d-overlay-root="" />
       {stage && <StageContext.Provider value={stage}>{children}</StageContext.Provider>}
+      {overlay != null && (
+        <div data-fancy-3d-stage-overlay="" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+          {stage ? <StageContext.Provider value={stage}>{overlay}</StageContext.Provider> : overlay}
+        </div>
+      )}
+      {buttonPlacement && !outer && <FullscreenButton controller={fs} placement={buttonPlacement} />}
     </div>
+    </FullscreenContext.Provider>
   );
 }
 
@@ -536,6 +610,16 @@ export interface SceneViewProps {
    * faces show whenever a card is off-centre in the perspective view.
    */
   depth?: number;
+  /** Drawn over the scene inside the Stage root (breadcrumbs, a fact card); it goes full screen with the view. */
+  overlay?: ReactNode;
+  /** Full screen, as `<Stage>`: controlled `fullscreen`, `defaultFullscreen`, `onFullscreenChange`, the button, labels. */
+  fullscreen?: boolean;
+  defaultFullscreen?: boolean;
+  onFullscreenChange?: (fullscreen: boolean, meta: FullscreenChangeMeta) => void;
+  fullscreenLabels?: Partial<FullscreenLabels>;
+  fullscreenButton?: StageProps["fullscreenButton"];
+  /** The Stage's handle: full screen from code or an agent. */
+  ref?: Ref<StageHandle>;
   className?: string;
   style?: CSSProperties;
 }
@@ -548,9 +632,20 @@ export interface SceneViewProps {
  * the scene's extent, the viewport or `yaw` changes. Mirrors fancy-3d-babylon's
  * `<SceneView>`.
  */
-export function SceneView({ className, style, children, ...props }: SceneViewProps) {
+export function SceneView({ className, style, children, overlay, fullscreen, defaultFullscreen, onFullscreenChange, fullscreenLabels, fullscreenButton, ref, ...props }: SceneViewProps) {
   return (
-    <Stage clearColor="transparent" className={className} style={style}>
+    <Stage
+      clearColor="transparent"
+      className={className}
+      style={style}
+      overlay={overlay}
+      fullscreen={fullscreen}
+      defaultFullscreen={defaultFullscreen}
+      onFullscreenChange={onFullscreenChange}
+      fullscreenLabels={fullscreenLabels}
+      fullscreenButton={fullscreenButton}
+      ref={ref}
+    >
       <SceneViewContent {...props} />
       {children}
     </Stage>
@@ -591,7 +686,7 @@ function SceneViewContent({
   depth = 0,
   showGrid = false,
   gridSize = 20,
-}: Omit<SceneViewProps, "className" | "style" | "children">) {
+}: Omit<SceneViewProps, "className" | "style" | "children" | "overlay" | "fullscreen" | "defaultFullscreen" | "onFullscreenChange" | "fullscreenLabels" | "fullscreenButton" | "ref">) {
   const stage = useStage();
   const resolved = useSceneTheme(theme, stage.canvas);
   const palette = SCENE_PALETTES[resolved];

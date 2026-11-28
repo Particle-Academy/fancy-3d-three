@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-28
+
+### Added
+
+- **Full screen for `<Stage>` and `<SceneView>`, with the whole control UX
+  inside.** A full-screen button shows by default (bottom right;
+  `fullscreenButton={false}` hides it, a corner name moves it). The Stage ROOT
+  goes full screen, not the bare canvas, so the Monitors and everything in the
+  new **`overlay`** slot come along: breadcrumbs, fact cards, toolbars. The
+  overlay is drawn inside the root and passes pointer events to the canvas
+  except on its children. Controlled with `fullscreen` / `defaultFullscreen` /
+  `onFullscreenChange(on, { source })`, `fullscreenLabels`; a `ref`
+  (`StageHandle`) gives `setFullscreen`, `toggleFullscreen`, `getFullscreen`
+  and `root`; children and the overlay read the controller with the core's
+  `useFullscreenContext()`. It is the core's one implementation
+  (`@particle-academy/fancy-3d/fullscreen`): the Fullscreen API, else a fixed
+  full-viewport mode; Esc and the button exit; the renderer size and camera
+  aspect follow; the canvas keeps keyboard focus. A Stage inside a viewer that
+  owns full screen (fancy-graph's `GraphView3D`) defers to it. Mirrors
+  fancy-3d-babylon. **Nothing to do** unless the new button overlaps something of
+  yours in the bottom-right corner: move it or pass `fullscreenButton={false}`.
+
+### Changed
+
+- **Requires `@particle-academy/fancy-3d` `>=0.7.0`** (peer, was `>=0.6.0`),
+  which adds the `./fullscreen` subpath this uses.
+
 ## [0.4.0] — 2026-11-28
 
 ### Added

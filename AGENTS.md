@@ -62,6 +62,22 @@ The Babylon twin uses the same names with `babylon`. Use `install-instructions`
 
 ## Traps
 
+- **Full screen is built in.** `<Stage>` and `<SceneView>` show a
+  full-screen button (bottom right; `fullscreenButton={false}` hides it, a
+  corner name moves it). The Stage ROOT goes full screen, so the canvas, the
+  Monitors and the `overlay` come along; put breadcrumbs, fact cards and
+  toolbars in `overlay` (drawn inside the root, clicks pass through to the
+  canvas except on its children), not beside the Stage, or they stay behind.
+  Controlled with `fullscreen` / `onFullscreenChange(on, { source })`;
+  `ref` gives `setFullscreen(on)`, `toggleFullscreen()`, `getFullscreen()`.
+  The Fullscreen API where available, else a fixed full-viewport mode (iPhone
+  Safari). Esc and the button exit; the renderer and camera aspect follow the
+  new size; the canvas keeps keyboard focus. Handles:
+  `data-fancy-3d-fullscreen` on the root, `data-fancy-3d-fullscreen-button`.
+  react-fancy 6.32.0+ menus opened from the overlay stay visible in native
+  full screen. Inside a viewer that owns full screen (fancy-graph's
+  `GraphView3D`) the Stage uses that viewer's. It is the core's
+  `@particle-academy/fancy-3d/fullscreen`.
 - **Not SSR-safe.** three.js needs `window`. In an Inertia app wrap `<Stage>`,
   `<Monitor>` and a three `<Canvas>` in `<FancyClientOnly>` from
   `@particle-academy/fancy-inertia`.
