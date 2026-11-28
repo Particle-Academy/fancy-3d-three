@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-11-28
+
 ### Added
 
 - **`<SceneView scene={scene} />` renders a fancy-3d Scene on three.js the way
@@ -41,8 +43,9 @@
 - `createCard3D`'s default edge is the theme's card edge, not a near-black.
 - **BREAKING: needs `@particle-academy/fancy-3d` 0.6.0 or later.** The shared
   `paintWidget`, palettes, `sceneToWorld` and `frameScene` are imported from it.
-  Upgrade the core with this package; nothing else to do. (Release order: the
-  core first, then this package with its peer floor raised to `>=0.6 <2.0`.)
+  Upgrade the core with this package; nothing else to do. The peer floor rises
+  from `>=0.4 <2.0` to `>=0.6.0 <2.0`, and the suite is built and tested against
+  the published fancy-3d 0.6.0.
 
 ### Fixed
 
