@@ -90,7 +90,7 @@
     }
   },
   "devDependencies": {
-    "@particle-academy/fancy-3d": "^0.6.0",
+    "@particle-academy/fancy-3d": "^0.7.0",
     "@particle-academy/react-fancy": "^4.0.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
