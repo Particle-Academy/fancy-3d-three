@@ -10,7 +10,8 @@
   definition (`sceneToWorld`, `frameScene`, `SCENE_PALETTES`). Options: `theme`,
   `background` (`"theme"` | `"transparent"` | a colour), `showGrid` / `gridSize`
   (the DOM Canvas dot grid), `yaw`, `live(node)` to mount a node as live React on
-  a `<Monitor>`, `depth`, and children rendered inside the Stage. Mirrors
+  a `<Monitor>`, `depth` (0 by default: flat cards, as the DOM draws them;
+  a thickness extrudes them), and children rendered inside the Stage. Mirrors
   fancy-3d-babylon's `<SceneView>`. Additive; nothing to do.
 - **`<Stage clearColor="transparent">`** shows the page behind the canvas.
 - **`<Monitor background="transparent">` and `bezelThickness={0}`** draw no pane
@@ -44,6 +45,13 @@
   core first, then this package with its peer floor raised to `>=0.6 <2.0`.)
 
 ### Fixed
+
+- **`<SceneView>` cards are flat by default, so no dark line runs down an
+  off-centre card's inner edge.** Cards were thin extruded boxes, and in the
+  perspective view the camera saw the inner side face of every off-centre card:
+  a lit, blue-grey 1px line outside its border that the DOM card does not have.
+  A painted node is now a flat panel on the scene plane unless `depth > 0` is
+  passed. Nothing to do.
 
 - A node with no `size` gets the same default box as in the core and the DOM
   renderer, so `sceneBounds` and the layouts agree with them.

@@ -39,7 +39,7 @@ import {
   type SceneTheme,
   type WorldPlacement,
 } from "@particle-academy/fancy-3d";
-import { createCard3D } from "./primitives";
+import { createCard3D, createPanel } from "./primitives";
 
 /* ------------------------------------------------------------------ */
 /* 2D perspective transform — maps a unit rectangle to a 4-point quad  */
@@ -530,7 +530,11 @@ export interface SceneViewProps {
   gridSize?: number;
   /** Rendered inside the Stage, so they can `useStage()` to add their own meshes or drive the camera. */
   children?: ReactNode;
-  /** Card thickness in world units. Defaults to 0.01 (1 scene px), so its sides read as the card's border. */
+  /**
+   * Card thickness in world units. Defaults to 0: flat cards, as the DOM draws
+   * them. A thickness makes each card an extruded `createCard3D`, whose side
+   * faces show whenever a card is off-centre in the perspective view.
+   */
   depth?: number;
   className?: string;
   style?: CSSProperties;
@@ -584,7 +588,7 @@ function SceneViewContent({
   background = "theme",
   yaw = 0,
   live,
-  depth = 0.01,
+  depth = 0,
   showGrid = false,
   gridSize = 20,
 }: Omit<SceneViewProps, "className" | "style" | "children">) {
@@ -653,17 +657,16 @@ function SceneViewContent({
     for (const node of painted) {
       const at = placements.find((p) => p.id === node.id);
       if (!at) continue;
-      const mesh = createCard3D({
-        scene: stage.scene,
-        name: `scene-node-${node.id}`,
-        width: at.width,
-        height: at.height,
-        depth,
-        theme: resolved,
-        edge: { type: "color", color: palette.cardBorder },
-        front: { type: "widget", widget: node.widget, pixelWidth: at.pixelWidth, pixelHeight: at.pixelHeight },
-      }) as CardMesh;
-      // The card's face sits on the scene plane; its thickness goes behind it.
+      const front = { type: "widget" as const, widget: node.widget, pixelWidth: at.pixelWidth, pixelHeight: at.pixelHeight, theme: resolved };
+      // Flat by default, as the DOM draws a card. A card with thickness shows
+      // its inner side face to the camera whenever it is off-centre: a lit 1px
+      // line outside its border that the DOM card does not have.
+      const mesh = (
+        depth > 0
+          ? createCard3D({ scene: stage.scene, name: `scene-node-${node.id}`, width: at.width, height: at.height, depth, theme: resolved, edge: { type: "color", color: palette.cardBorder }, front })
+          : createPanel({ scene: stage.scene, name: `scene-node-${node.id}`, width: at.width, height: at.height, surface: front })
+      ) as CardMesh;
+      // The card's face sits on the scene plane; any thickness goes behind it.
       mesh.position.set(at.x, at.y, at.z - depth / 2);
       mesh.userData = { ...mesh.userData, nodeId: node.id, kind: node.widget.kind };
       meshes.push(mesh);

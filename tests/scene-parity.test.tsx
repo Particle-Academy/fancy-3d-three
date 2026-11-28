@@ -149,18 +149,32 @@ describe("<SceneView>", () => {
     expect(camera.position.y).toBeCloseTo(0, 6);
   });
 
-  it("places every painted card where the core puts it, face on the scene plane", () => {
+  it("paints every card FLAT where the core puts it, as the DOM draws it", () => {
+    // A card with thickness shows its inner side face to the camera when it is
+    // off-centre: a lit 1px line outside its border that the DOM card does not
+    // have. By default a painted card is a plane on the scene plane.
     const { scene } = render(<SceneView scene={SCENE}><Probe /></SceneView>);
     for (const p of sceneToWorld(SCENE)) {
       const mesh = scene.getObjectByName(`scene-node-${p.id}`) as THREE.Mesh;
       expect(mesh, p.id).toBeTruthy();
-      expect(mesh.position.x).toBeCloseTo(p.x);
-      expect(mesh.position.y).toBeCloseTo(p.y);
-      const box = mesh.geometry as THREE.BoxGeometry;
-      expect(box.parameters.width).toBeCloseTo(p.width);
-      expect(box.parameters.height).toBeCloseTo(p.height);
-      expect(mesh.position.z + box.parameters.depth / 2).toBeCloseTo(p.z);
+      expect(mesh.geometry).toBeInstanceOf(THREE.PlaneGeometry);
+      const plane = mesh.geometry as THREE.PlaneGeometry;
+      expect(plane.parameters.width).toBeCloseTo(p.width);
+      expect(plane.parameters.height).toBeCloseTo(p.height);
+      expect(mesh.position.toArray().map((v) => +v.toFixed(6))).toEqual([p.x, p.y, p.z].map((v) => +v.toFixed(6)));
+      // Faces the front-on camera (+z), unrotated.
+      expect(mesh.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
     }
+  });
+
+  it("extrudes a card only when a depth is asked for, its face still on the scene plane", () => {
+    const { scene } = render(<SceneView scene={SCENE} depth={0.06}><Probe /></SceneView>);
+    const p = sceneToWorld(SCENE).find((w) => w.id === "owner")!;
+    const mesh = scene.getObjectByName("scene-node-owner") as THREE.Mesh;
+    const box = mesh.geometry as THREE.BoxGeometry;
+    expect(box).toBeInstanceOf(THREE.BoxGeometry);
+    expect(box.parameters.depth).toBeCloseTo(0.06);
+    expect(mesh.position.z + box.parameters.depth / 2).toBeCloseTo(p.z);
   });
 
   it("mounts a live node on a Monitor sized to the node, not as a painted card", () => {
